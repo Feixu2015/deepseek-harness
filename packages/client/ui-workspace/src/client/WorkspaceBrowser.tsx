@@ -13,7 +13,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCloseFill14, IconPersonalizationOutline16,
-  IconProjectAddOutline16, IconSearchOutline16, Menu, Modal, Tooltip,
+  IconProjectAddOutline16, IconRefreshOutline16, IconSearchOutline16, IconTrashOutline16,
+  IconTriangleRightFill14, Menu, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   SessionId, SessionListState, SessionSearchResultItem, WorkspaceId, WorkspaceView,
@@ -754,6 +755,8 @@ export function WorkspaceBrowser({
   insertWorkspaceBefore,
   archiveSession,
   insertSessionBefore,
+  unarchiveSession,
+  deleteArchivedSession,
   createWorkspace,
   searchSessions,
   searchResultLimit,
@@ -797,7 +800,9 @@ export function WorkspaceBrowser({
   // states; the menu anchors on this button).
   const [wsPickerOpen, setWsPickerOpen] = useState(false)
   const wsPlusRef = useRef<HTMLButtonElement>(null)
+  const [archiveExpanded, setArchiveExpanded] = useState(false)
   const composingRef = useRef(false)
+  const sessions = useSessions(s => s)
 
   // Rail search = expand + land in the search box: the flag arms before the
   // expand request; once the shell flips wide the input mounts and takes focus.
@@ -1165,6 +1170,74 @@ export function WorkspaceBrowser({
               />
             ))}
       </div>
+
+      {/* Archived sessions section: collapsible list of archived sessions
+          with activate (unarchive) and delete actions. */}
+      {wide && archivedSessionIds.length > 0 && (
+        <div className={css.archiveSection}>
+          <button
+            type="button"
+            className={css.archiveHeader}
+            onClick={() => { setArchiveExpanded(v => !v) }}
+            aria-expanded={archiveExpanded}
+          >
+            <span className={css.archiveTitle}>
+              {t('archive.section.title')}
+              <span className={css.archiveCount}>
+                {t('archive.count' as never, { n: archivedSessionIds.length })}
+              </span>
+            </span>
+            <IconTriangleRightFill14
+              className={clsx(css.archiveChevron, archiveExpanded && css.archiveChevronExpanded)}
+            />
+          </button>
+          {archiveExpanded && (
+            <div className={css.archiveList}>
+              {archivedSessionIds.map((sessionId) => {
+                const session = sessions.byId[sessionId]
+                const title = session?.blank ? t('session.new') : (session?.displayTitle || sessionId)
+                return (
+                  <div key={sessionId} className={css.archiveItem}>
+                    <span className={css.archiveItemName} title={title}>
+                      {title}
+                    </span>
+                    <span className={css.archiveItemActions}>
+                      <Tooltip label={t('archive.activate')} side="top" delayMs={500}>
+                        <button
+                          type="button"
+                          className={css.archiveActionBtn}
+                          aria-label={t('archive.activate.aria', { name: sessionId })}
+                          onClick={() => {
+                            unarchiveSession(sessionId).catch((reason: unknown) => {
+                              console.warn('session unarchive rejected:', reason)
+                            })
+                          }}
+                        >
+                          <IconRefreshOutline16 size={14} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label={t('archive.delete')} side="top" delayMs={500}>
+                        <button
+                          type="button"
+                          className={clsx(css.archiveActionBtn, css.archiveActionBtnDanger)}
+                          aria-label={t('archive.delete.aria', { name: sessionId })}
+                          onClick={() => {
+                            deleteArchivedSession(sessionId).catch((reason: unknown) => {
+                              console.warn('session delete rejected:', reason)
+                            })
+                          }}
+                        >
+                          <IconTrashOutline16 size={14} />
+                        </button>
+                      </Tooltip>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <Modal
         open={renameTarget !== null}

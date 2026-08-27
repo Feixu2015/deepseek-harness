@@ -14,10 +14,20 @@
  * rows the user can still fill in by hand.
  */
 
-import { useState } from 'react'
-import type { ReactNode } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import type { ReactNode, ChangeEvent } from 'react'
+
+// Minimal clsx replacement: filters truthy values and joins with spaces.
+// The platform plugin loader has no clsx module, so we inline the one
+// call site's need instead of adding a package dependency.
+function cx(...args: (string | false | null | undefined)[]): string {
+  return args.filter(Boolean).join(' ')
+}
 import type { DiscoveredModelView, IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button, Modal,
+  IconSearchOutline16,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import { messageOf } from './store.ts'
@@ -164,6 +174,12 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  const [searchText, setSearchText] = useState('')
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  // Custom model list: search, selection, and batch operations
+  const [listSearchText, setListSearchText] = useState('')
+  const [selectedModels, setSelectedModels] = useState<ReadonlySet<number>>(new Set())
+  const listSearchInputRef = useRef<HTMLInputElement | null>(null)
   // Rows carry an id and a name; capacities are the exception, so they stay
   // folded until asked for rather than crowding every row with four inputs.
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
@@ -290,6 +306,103 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
+  // Filter candidates based on search query (case-insensitive match on id or name)
+  const searchQuery = searchText.trim().toLowerCase()
+  const filteredCandidates = useMemo(() => {
+    if (searchQuery === '' || candidates === undefined) return candidates ?? []
+    return candidates.filter(model =>
+      model.id.toLowerCase().includes(searchQuery)
+      || (model.name !== undefined && model.name.toLowerCase().includes(searchQuery)),
+    )
+  }, [candidates, searchQuery])
+
+  const onSearchChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    setSearchText(event.target.value)
+  }
+
+  // Select all currently visible (filtered) candidates
+  const selectAll = useCallback(() => {
+    setPicked((current) => {
+      const next = new Set(current)
+      for (const candidate of filteredCandidates) next.add(candidate.id)
+      return next
+    })
+  }, [filteredCandidates])
+
+  // Deselect all currently visible (filtered) candidates
+  const deselectAll = useCallback(() => {
+    setPicked((current) => {
+      const next = new Set(current)
+      for (const candidate of filteredCandidates) next.delete(candidate.id)
+      return next
+    })
+  }, [filteredCandidates])
+
+  // Reset search when picker opens/closes
+  useEffect(() => {
+    if (candidates !== undefined) {
+      setSearchText('')
+      // Auto-focus search input when the picker opens
+      queueMicrotask(() => { searchInputRef.current?.focus() })
+    }
+  }, [candidates])
+
+  // --- Custom model list: search, selection, and batch operations ---
+  const listSearchQuery = listSearchText.trim().toLowerCase()
+  const filteredModelIndices = useMemo(() => {
+    if (listSearchQuery === '') return models.map((_, i) => i)
+    return models.filter(model =>
+      textOf(model, 'id').toLowerCase().includes(listSearchQuery)
+      || textOf(model, 'name').toLowerCase().includes(listSearchQuery),
+    ).map(model => models.indexOf(model))
+  }, [models, listSearchQuery])
+
+  const onListSearchChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    setListSearchText(event.target.value)
+  }
+
+  const toggleModelSelection = (index: number): void => {
+    setSelectedModels((current) => {
+      const next = new Set(current)
+      if (!next.delete(index)) next.add(index)
+      return next
+    })
+  }
+
+  const selectAllVisibleModels = useCallback(() => {
+    setSelectedModels((current) => {
+      const next = new Set(current)
+      for (const index of filteredModelIndices) next.add(index)
+      return next
+    })
+  }, [filteredModelIndices])
+
+  const deselectAllVisibleModels = useCallback(() => {
+    setSelectedModels((current) => {
+      const next = new Set(current)
+      for (const index of filteredModelIndices) next.delete(index)
+      return next
+    })
+  }, [filteredModelIndices])
+
+  const deleteSelectedModels = useCallback(() => {
+    if (selectedModels.size === 0) return
+    const toDelete = new Set(selectedModels)
+    onChange(models.filter((_, index) => !toDelete.has(index)))
+    setSelectedModels(new Set())
+  }, [selectedModels, models, onChange])
+
+  // Clear selection when models change externally
+  useEffect(() => {
+    setSelectedModels((current) => {
+      const next = new Set<number>()
+      for (const index of current) {
+        if (index < models.length) next.add(index)
+      }
+      return next
+    })
+  }, [models.length])
+
   // A route the adapter already describes answers without an endpoint; only a
   // draft with neither has nothing to ask about.
   const askable = probe.provider !== undefined || (probe.baseURL !== undefined && probe.baseURL.length > 0)
@@ -331,97 +444,150 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         </button>
       </div>
       {models.length === 0 ? <p className={styles['modelEmpty']}>{t('modelsEmpty')}</p> : null}
-      {models.map((model, index) => (
-        <div key={index} className={styles['modelEntry']}>
-          <div className={styles['modelRow']}>
+      {models.length > 0 && (
+        <div className={styles['listToolbar']}>
+          <div className={styles['listSearch']}>
+            <IconSearchOutline16 className={styles['listSearchIcon']} />
             <input
-              className={styles['input']}
+              ref={listSearchInputRef}
               type="text"
-              value={textOf(model, 'id')}
-              placeholder={t('modelId')}
-              aria-label={`${t('modelId')} ${index + 1}`}
-              disabled={disabled}
-              onChange={(event) => { patch(index, { id: event.target.value }) }}
+              className={styles['listSearchInput']}
+              placeholder={t('listSearchPlaceholder')}
+              value={listSearchText}
+              onChange={onListSearchChange}
+              aria-label={t('listSearchPlaceholder')}
             />
-            <input
-              className={styles['input']}
-              type="text"
-              value={textOf(model, 'name')}
-              placeholder={t('modelName')}
-              aria-label={`${t('modelName')} ${index + 1}`}
-              disabled={disabled}
-              onChange={(event) => { patch(index, { name: event.target.value === '' ? undefined : event.target.value }) }}
-            />
+          </div>
+          <div className={styles['listActions']}>
+            <button type="button" className={styles['listActionBtn']} onClick={selectAllVisibleModels}>{t('listSelectAll')}</button>
+            <button type="button" className={styles['listActionBtn']} onClick={deselectAllVisibleModels}>{t('listDeselectAll')}</button>
             <button
               type="button"
-              className={styles['iconButton']}
-              aria-label={`${t('modelAdvanced')} ${index + 1}`}
-              aria-expanded={expanded.has(index)}
-              title={t('modelAdvanced')}
-              onClick={() => { toggleExpanded(index) }}
+              className={`${styles['listActionBtn']} ${styles['listActionBtnDanger']}`}
+              onClick={deleteSelectedModels}
+              disabled={selectedModels.size === 0}
             >
-              <IconChevron open={expanded.has(index)} />
-            </button>
-            <button
-              type="button"
-              className={`${styles['iconButton']} ${styles['iconButtonDanger']}`}
-              aria-label={`${t('removeModel')} ${index + 1}`}
-              title={t('removeModel')}
-              disabled={disabled}
-              onClick={() => {
-                onChange(models.filter((_model, at) => at !== index))
-                // Both stores are keyed by position, so every row after this
-                // one shifts down and would otherwise inherit its neighbour's
-                // state — a different row's capacities popping open, or its
-                // half-typed text appearing in another row's field.
-                setExpanded((current) => {
-                  const next = new Set<number>()
-                  for (const at of current) {
-                    if (at < index) next.add(at)
-                    else if (at > index) next.add(at - 1)
-                  }
-                  return next
-                })
-                setEditing(current => reindexOnRemove(current, index))
-              }}
-            >
-              <IconTrash />
+              {t('listDeleteSelected')}
+              {selectedModels.size > 0 && <span className={styles['listActionCount']}>{selectedModels.size}</span>}
             </button>
           </div>
-          {expanded.has(index)
-            ? (
-              <div className={styles['modelAdvanced']}>
-                <label className={styles['modelField']}>
-                  <span className={styles['modelFieldLabel']}>{t('modelContextWindow')}</span>
-                  <input
-                    className={styles['input']}
-                    type="text"
-                    inputMode="numeric"
-                    value={capacityText(model, index, 'contextWindow')}
-                    placeholder={CAPACITY_HINT.contextWindow}
-                    aria-label={`${t('modelContextWindow')} ${index + 1}`}
-                    disabled={disabled}
-                    onChange={(event) => { editCapacity(index, 'contextWindow', event.target.value) }}
-                  />
-                </label>
-                <label className={styles['modelField']}>
-                  <span className={styles['modelFieldLabel']}>{t('modelMaxTokens')}</span>
-                  <input
-                    className={styles['input']}
-                    type="text"
-                    inputMode="numeric"
-                    value={capacityText(model, index, 'maxTokens')}
-                    placeholder={CAPACITY_HINT.maxTokens}
-                    aria-label={`${t('modelMaxTokens')} ${index + 1}`}
-                    disabled={disabled}
-                    onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
-                  />
-                </label>
-              </div>
-            )
-            : null}
         </div>
-      ))}
+      )}
+      {filteredModelIndices.length === 0 && listSearchQuery !== ''
+        ? <p className={styles['listNoResults']}>{t('listNoResults')}</p>
+        : null}
+      {filteredModelIndices.map((index) => {
+        const model = models[index]
+        if (model === undefined) return null
+        return (
+          <div key={index} className={cx(styles['modelEntry'], selectedModels.has(index) && styles['modelEntrySelected'])}>
+            <div className={styles['modelRow']}>
+              <label className={styles['modelSelect']}>
+                <input
+                  type="checkbox"
+                  checked={selectedModels.has(index)}
+                  onChange={() => { toggleModelSelection(index) }}
+                  aria-label={`${t('modelId')} ${index + 1}`}
+                />
+              </label>
+              <input
+                className={styles['input']}
+                type="text"
+                value={textOf(model, 'id')}
+                placeholder={t('modelId')}
+                aria-label={`${t('modelId')} ${index + 1}`}
+                disabled={disabled}
+                onChange={(event) => { patch(index, { id: event.target.value }) }}
+              />
+              <input
+                className={styles['input']}
+                type="text"
+                value={textOf(model, 'name')}
+                placeholder={t('modelName')}
+                aria-label={`${t('modelName')} ${index + 1}`}
+                disabled={disabled}
+                onChange={(event) => { patch(index, { name: event.target.value === '' ? undefined : event.target.value }) }}
+              />
+              <button
+                type="button"
+                className={styles['iconButton']}
+                aria-label={`${t('modelAdvanced')} ${index + 1}`}
+                aria-expanded={expanded.has(index)}
+                title={t('modelAdvanced')}
+                onClick={() => { toggleExpanded(index) }}
+              >
+                <IconChevron open={expanded.has(index)} />
+              </button>
+              <button
+                type="button"
+                className={`${styles['iconButton']} ${styles['iconButtonDanger']}`}
+                aria-label={`${t('removeModel')} ${index + 1}`}
+                title={t('removeModel')}
+                disabled={disabled}
+                onClick={() => {
+                  onChange(models.filter((_model, at) => at !== index))
+                  // Both stores are keyed by position, so every row after this
+                  // one shifts down and would otherwise inherit its neighbour's
+                  // state — a different row's capacities popping open, or its
+                  // half-typed text appearing in another row's field.
+                  setExpanded((current) => {
+                    const next = new Set<number>()
+                    for (const at of current) {
+                      if (at < index) next.add(at)
+                      else if (at > index) next.add(at - 1)
+                    }
+                    return next
+                  })
+                  setEditing(current => reindexOnRemove(current, index))
+                  // Remove from selection if selected
+                  setSelectedModels((current) => {
+                    const next = new Set<number>()
+                    for (const at of current) {
+                      if (at < index) next.add(at)
+                      else if (at > index) next.add(at - 1)
+                    }
+                    return next
+                  })
+                }}
+              >
+                <IconTrash />
+              </button>
+            </div>
+            {expanded.has(index)
+              ? (
+                <div className={styles['modelAdvanced']}>
+                  <label className={styles['modelField']}>
+                    <span className={styles['modelFieldLabel']}>{t('modelContextWindow')}</span>
+                    <input
+                      className={styles['input']}
+                      type="text"
+                      inputMode="numeric"
+                      value={capacityText(model, index, 'contextWindow')}
+                      placeholder={CAPACITY_HINT.contextWindow}
+                      aria-label={`${t('modelContextWindow')} ${index + 1}`}
+                      disabled={disabled}
+                      onChange={(event) => { editCapacity(index, 'contextWindow', event.target.value) }}
+                    />
+                  </label>
+                  <label className={styles['modelField']}>
+                    <span className={styles['modelFieldLabel']}>{t('modelMaxTokens')}</span>
+                    <input
+                      className={styles['input']}
+                      type="text"
+                      inputMode="numeric"
+                      value={capacityText(model, index, 'maxTokens')}
+                      placeholder={CAPACITY_HINT.maxTokens}
+                      aria-label={`${t('modelMaxTokens')} ${index + 1}`}
+                      disabled={disabled}
+                      onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
+                    />
+                  </label>
+                </div>
+              )
+              : null}
+          </div>
+        )
+      })}
       <button
         type="button"
         className={styles['addModelButton']}
@@ -445,23 +611,45 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
           </>
         )}
       >
-        <ul className={styles['candidateList']}>
-          {(candidates ?? []).map(candidate => (
-            <li key={candidate.id} className={styles['candidate']}>
-              <label className={styles['candidateLabel']}>
-                <input
-                  type="checkbox"
-                  checked={picked.has(candidate.id)}
-                  onChange={() => { toggle(candidate.id) }}
-                />
-                {/* The id alone: it is the string adoption writes, and the
-                    capacities the endpoint reported are adopted with it and
-                    editable in the row that appears. */}
-                <span className={styles['candidateId']}>{candidate.id}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
+        <div className={styles['candidateToolbar']}>
+          <div className={styles['candidateSearch']}>
+            <IconSearchOutline16 className={styles['candidateSearchIcon']} />
+            <input
+              ref={searchInputRef}
+              type="text"
+              className={styles['candidateSearchInput']}
+              placeholder={t('fetchSearchPlaceholder')}
+              value={searchText}
+              onChange={onSearchChange}
+              aria-label={t('fetchSearchPlaceholder')}
+            />
+          </div>
+          <div className={styles['candidateActions']}>
+            <button type="button" className={styles['candidateActionBtn']} onClick={selectAll}>{t('fetchSelectAll')}</button>
+            <button type="button" className={styles['candidateActionBtn']} onClick={deselectAll}>{t('fetchDeselectAll')}</button>
+          </div>
+        </div>
+        {filteredCandidates.length === 0
+          ? <p className={styles['candidateNoResults']}>{t('fetchNoResults')}</p>
+          : (
+            <ul className={styles['candidateList']}>
+              {filteredCandidates.map(candidate => (
+                <li key={candidate.id} className={styles['candidate']}>
+                  <label className={styles['candidateLabel']}>
+                    <input
+                      type="checkbox"
+                      checked={picked.has(candidate.id)}
+                      onChange={() => { toggle(candidate.id) }}
+                    />
+                    {/* The id alone: it is the string adoption writes, and the
+                        capacities the endpoint reported are adopted with it and
+                        editable in the row that appears. */}
+                    <span className={styles['candidateId']}>{candidate.id}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
       </Modal>
     </section>
   )

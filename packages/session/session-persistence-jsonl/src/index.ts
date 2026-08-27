@@ -469,6 +469,25 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     return snapshots
   }
 
+  /**
+   * Permanently delete one session's JSONL artifact. Idempotent for an absent
+   * id (no error). The session must not be live — the caller is responsible for
+   * checking this before invoking delete.
+   * @param id - the session whose log file to delete.
+   */
+  async delete(id: SessionId): Promise<void> {
+    const path = await this.findLog(id)
+    if (path === undefined) return
+    await rm(path, { force: true })
+    // Remove the now-empty session directory if it exists
+    const dir = dirname(path)
+    try {
+      await rm(dir, { recursive: true, force: true })
+    } catch {
+      /* v8 ignore next -- directory removal is best-effort; non-empty dir is fine */
+    }
+  }
+
   private async listArtifacts(signal?: AbortSignal): Promise<Array<{ header: SessionHeader; path: string }>> {
     signal?.throwIfAborted()
     await this.ensureRootEncoding()

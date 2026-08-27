@@ -491,6 +491,132 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* Archived sessions section at the bottom of the sidebar. */
+.archiveSection {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.archiveHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.archiveHeader:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.archiveTitle {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.archiveCount {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  margin-left: 4px;
+}
+
+.archiveChevron {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 180ms var(--ds-ease-in-out);
+}
+
+.archiveChevronExpanded {
+  transform: rotate(90deg);
+}
+
+.archiveList {
+  flex: none;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-top: 4px;
+}
+
+.archiveEmpty {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.archiveItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.archiveItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.archiveItemName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.archiveItemActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms var(--ds-ease-in-out);
+}
+
+.archiveItem:hover .archiveItemActions {
+  opacity: 1;
+}
+
+.archiveActionBtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.archiveActionBtn:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+.archiveActionBtnDanger:hover {
+  background: var(--dsw-alias-state-error-bg);
+  color: var(--dsw-alias-state-error-primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wide {
     animation: none;
@@ -500,7 +626,8 @@
   .sectionLabel,
   .searchSlot,
   .searchInput,
-  .headerActions {
+  .headerActions,
+  .archiveChevron {
     transition: none;
   }
 }

@@ -238,6 +238,15 @@ export abstract class SessionPersistence extends Service {
    * @returns one header and opaque revision per materialized session without loading full logs.
    */
   abstract listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]>
+
+  /**
+   * Permanently delete one session's durable data (header + event log). The
+   * session must NOT be live — deleting a live session rejects. Idempotent for
+   * an already-absent id (no error). Backends that do not expose per-session
+   * artifacts (e.g. SQLite) remove the session's rows.
+   * @param id - the session whose durable data to delete.
+   */
+  abstract delete(id: SessionId): Promise<void>
 }
 
 export default SessionPersistence

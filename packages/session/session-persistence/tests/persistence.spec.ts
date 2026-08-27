@@ -173,6 +173,8 @@ class MemoryPersistence extends SessionPersistence implements PersistenceBackend
       revision: memoryRevision(entry),
     }))
   }
+
+  async delete(_id: SessionId): Promise<void> {}
 }
 
 /** Controllable storage primitive for serialization and retirement failure tests. */

@@ -255,6 +255,69 @@ export class WorkspaceRegistry extends Service {
   }
 
   /**
+   * Unarchive one session durably, restoring it to grouping surfaces. The
+   * session must exist (live or in session persistence); its workspace
+   * accounting — or lack of one — is irrelevant. An already unarchived id
+   * resolves without writing.
+   * @param sessionId - The session to unarchive.
+   * @returns resolution after durability.
+   */
+  unarchiveSession(sessionId: SessionId): Promise<void> {
+    return this.enqueueOperation(async () => {
+      if (!this.requireState().archivedSessionIds.includes(sessionId)) return
+      if (!(await this.sessionKnown(sessionId))) {
+        throw new WorkspaceUnknownSessionError(sessionId)
+      }
+      const state = this.requireState()
+      await this.setState({
+        ...state,
+        archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
+      })
+    })
+  }
+
+  /**
+   * Permanently delete one archived session: removes it from the archive set,
+   * from every workspace's accounting, from the header index, and deletes its
+   * durable data from session persistence. The session must be archived and
+   * must NOT be live. An unknown session fails with
+   * {@link WorkspaceUnknownSessionError}.
+   * @param sessionId - The archived session to delete.
+   * @returns resolution after durability.
+   */
+  deleteArchivedSession(sessionId: SessionId): Promise<void> {
+    return this.enqueueOperation(async () => {
+      const state = this.requireState()
+      if (!state.archivedSessionIds.includes(sessionId)) {
+        throw new WorkspaceUnknownSessionError(sessionId)
+      }
+      // Cannot delete a live session — retire/dispose it first.
+      if (this.ctx.get('sessions')?.get(sessionId) !== undefined) {
+        throw new Error(`cannot delete live session '${sessionId}': retire it first`)
+      }
+      // Remove from archive set
+      const nextArchivedIds = state.archivedSessionIds.filter(id => id !== sessionId)
+      // Remove from every workspace's accounting
+      for (const entity of this.entities.values()) {
+        if (entity.sessionIds.includes(sessionId)) {
+          await entity.detachSession(sessionId)
+        }
+      }
+      // Remove from header index
+      this.headers.delete(sessionId)
+      this.sessionPaths.delete(sessionId)
+      this.invalidSessionPaths.delete(sessionId)
+      // Update archive set in state
+      await this.setState({
+        ...state,
+        archivedSessionIds: nextArchivedIds,
+      })
+      // Delete durable data from persistence
+      await this.ctx.sessionPersistence.delete(sessionId)
+    })
+  }
+
+  /**
    * Whether a session is live, header-indexed, or present in a fresh
    * persistence listing. Only a definite miss returns false — a failing
    * `sessionPersistence.list()` propagates so storage faults never

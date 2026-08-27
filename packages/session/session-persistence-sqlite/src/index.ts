@@ -364,6 +364,17 @@ export class SqliteSessionPersistence extends SessionPersistence implements Pers
     }))
   }
 
+  /**
+   * Permanently delete one session's data from SQLite. Idempotent for an
+   * absent id (no error). Removes both the metadata row and all event rows.
+   * @param id - the session whose data to delete.
+   */
+  async delete(id: SessionId): Promise<void> {
+    await this.ready
+    this.db.prepare('DELETE FROM events WHERE session_id = ?').run(id)
+    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+  }
+
   /** Close the database handle (awaited by the coordinator's dispose, post-drain). */
   async close(): Promise<void> {
     await this.ready

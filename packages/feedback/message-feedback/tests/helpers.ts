@@ -166,6 +166,8 @@ class TestPersistence extends SessionPersistence {
     }))
   }
 
+  async delete(_id: SessionId): Promise<void> {}
+
   persist(session: Session): void {
     this.durable.set(session.id, { meta: session.header, events: session.events })
   }

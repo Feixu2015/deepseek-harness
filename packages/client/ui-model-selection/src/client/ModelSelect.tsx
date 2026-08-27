@@ -13,13 +13,13 @@
  */
 import {
   useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
-  type KeyboardEvent, type FocusEvent,
+  type KeyboardEvent, type FocusEvent, type ChangeEvent,
 } from 'react'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-  IconWarningOutline16, Toast,
+  IconSearchOutline16, IconWarningOutline16, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -52,6 +52,8 @@ export function ModelSelect(
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
+  const [search, setSearch] = useState('')
+  const searchRef = useRef<HTMLInputElement | null>(null)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -102,6 +104,31 @@ export function ModelSelect(
     ], [reasoning, t])
   const busy = state.status === 'selecting'
 
+  // Filter models based on search query (case-insensitive match on name or description)
+  const searchQuery = search.trim().toLowerCase()
+  const filteredGroups = useMemo(() => {
+    if (searchQuery === '') return state.groups
+    return state.groups.map(group => ({
+      ...group,
+      models: group.models.filter(model =>
+        model.name.toLowerCase().includes(searchQuery)
+        || (model.description !== undefined && model.description.toLowerCase().includes(searchQuery))
+        || model.id.toLowerCase().includes(searchQuery),
+      ),
+    })).filter(group => group.models.length > 0)
+  }, [state.groups, searchQuery])
+
+  const onSearchChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    setSearch(event.target.value)
+  }
+
+  // Auto-focus search input when entering model pane
+  useEffect(() => {
+    if (pane === 'model' && open) {
+      queueMicrotask(() => { searchRef.current?.focus() })
+    }
+  }, [pane, open])
+
   const reload = (): void => {
     lastActionRef.current = 'load'
     load()
@@ -128,6 +155,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setPane('root')
+    setSearch('')
     setOpen(true)
     reload()
   }
@@ -135,6 +163,7 @@ export function ModelSelect(
   const close = (restoreFocus = false): void => {
     setOpen(false)
     setPane('root')
+    setSearch('')
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
@@ -283,8 +312,20 @@ export function ModelSelect(
                   <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
                 </div>
               ))}
+              <div className={css.search}>
+                <IconSearchOutline16 className={css.searchIcon} />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  className={css.searchInput}
+                  placeholder={t('search.placeholder')}
+                  value={search}
+                  onChange={onSearchChange}
+                  aria-label={t('search.placeholder')}
+                />
+              </div>
               <div className={clsx(css.groups, 'scrollable')}>
-                {state.groups.map((group) => {
+                {filteredGroups.map((group) => {
                   const headingId = `${id}-${group.id}`
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
@@ -319,8 +360,8 @@ export function ModelSelect(
                   )
                 })}
               </div>
-              {state.status === 'ready' && choices.length === 0 && (
-                <div className={css.empty}>{t('empty.models')}</div>
+              {state.status === 'ready' && filteredGroups.length === 0 && (
+                <div className={css.empty}>{searchQuery !== '' ? t('search.noResults') : t('empty.models')}</div>
               )}
             </>
           )}
