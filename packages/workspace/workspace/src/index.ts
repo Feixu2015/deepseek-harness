@@ -291,10 +291,6 @@ export class WorkspaceRegistry extends Service {
       if (!state.archivedSessionIds.includes(sessionId)) {
         throw new WorkspaceUnknownSessionError(sessionId)
       }
-      // Cannot delete a live session — retire/dispose it first.
-      if (this.ctx.get('sessions')?.get(sessionId) !== undefined) {
-        throw new Error(`cannot delete live session '${sessionId}': retire it first`)
-      }
       // Remove from archive set
       const nextArchivedIds = state.archivedSessionIds.filter(id => id !== sessionId)
       // Remove from every workspace's accounting. Use hasSession (checks
