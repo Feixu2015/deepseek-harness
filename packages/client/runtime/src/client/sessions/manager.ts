@@ -870,6 +870,13 @@ export class SessionManager {
         this.sessions.get(frame.sessionId)?.handleAgentError(frame.message)
         return // not reflected in the list
       }
+      case 'host/archived-sessions-changed': {
+        // The archive set changed — a session may have been deleted, so the
+        // session list (which reads from persistence) must be refreshed to
+        // drop any session whose durable data was just removed.
+        void this.refreshList()
+        return
+      }
       default:
         return // stream/error ignored; unknown frames ignored (documented default)
     }
