@@ -2879,11 +2879,19 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         try {
           await ctx.workspaceRegistry.deleteArchivedSession(sessionId)
         } catch (error: unknown) {
-          if (!(error instanceof WorkspaceUnknownSessionError)) throw error
+          if (error instanceof WorkspaceUnknownSessionError) {
+            return err(request, {
+              code: 'session-not-found',
+              message: error.message,
+              details: { sessionId },
+            })
+          }
+          // Surface other errors (e.g. live session) as internal with the
+          // underlying message instead of a generic HTTP 500.
           return err(request, {
-            code: 'session-not-found',
-            message: error.message,
-            details: { sessionId },
+            code: 'internal',
+            message: error instanceof Error ? error.message : String(error),
+            details: {},
           })
         }
         return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
