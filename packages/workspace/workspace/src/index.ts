@@ -297,9 +297,12 @@ export class WorkspaceRegistry extends Service {
       }
       // Remove from archive set
       const nextArchivedIds = state.archivedSessionIds.filter(id => id !== sessionId)
-      // Remove from every workspace's accounting
+      // Remove from every workspace's accounting. Use hasSession (checks
+      // raw record.sessionIds) instead of the sessionIds getter (which
+      // filters by sessionPath) so that sessions whose cwd no longer
+      // resolves are still durably detached.
       for (const entity of this.entities.values()) {
-        if (entity.sessionIds.includes(sessionId)) {
+        if (entity.hasSession(sessionId)) {
           await entity.detachSession(sessionId)
         }
       }

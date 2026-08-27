@@ -803,6 +803,27 @@ export function WorkspaceBrowser({
   const [archiveExpanded, setArchiveExpanded] = useState(false)
   const composingRef = useRef(false)
   const sessions = useSessions(s => s)
+  // Archive session delete confirmation dialog.
+  const [archiveDeleteTarget, setArchiveDeleteTarget] = useState<SessionId | null>(null)
+  const [archiveDeleting, setArchiveDeleting] = useState(false)
+  const [archiveDeleteError, setArchiveDeleteError] = useState<string | null>(null)
+  const closeArchiveDelete = () => {
+    if (archiveDeleting) return
+    setArchiveDeleteTarget(null)
+    setArchiveDeleteError(null)
+  }
+  const confirmArchiveDelete = () => {
+    if (archiveDeleteTarget === null || archiveDeleting) return
+    setArchiveDeleting(true)
+    setArchiveDeleteError(null)
+    deleteArchivedSession(archiveDeleteTarget).then(() => {
+      setArchiveDeleting(false)
+      setArchiveDeleteTarget(null)
+    }).catch((reason: unknown) => {
+      setArchiveDeleting(false)
+      setArchiveDeleteError(reason instanceof Error ? reason.message : String(reason))
+    })
+  }
 
   // Rail search = expand + land in the search box: the flag arms before the
   // expand request; once the shell flips wide the input mounts and takes focus.
@@ -1222,9 +1243,8 @@ export function WorkspaceBrowser({
                           className={clsx(css.archiveActionBtn, css.archiveActionBtnDanger)}
                           aria-label={t('archive.delete.aria', { name: sessionId })}
                           onClick={() => {
-                            deleteArchivedSession(sessionId).catch((reason: unknown) => {
-                              console.warn('session delete rejected:', reason)
-                            })
+                            setArchiveDeleteTarget(sessionId)
+                            setArchiveDeleteError(null)
                           }}
                         >
                           <IconTrashOutline16 size={14} />
@@ -1329,6 +1349,33 @@ export function WorkspaceBrowser({
       >
         {deleting && <div className={css.deleteStatus} role="status">{t('delete.pending')}</div>}
         {deleteError !== null && <div className={css.renameError} role="alert">{deleteError}</div>}
+      </Modal>
+
+      {/* Archive session delete confirmation dialog. */}
+      <Modal
+        open={archiveDeleteTarget !== null}
+        onClose={closeArchiveDelete}
+        closeLabel={t('close')}
+        title={t('archive.delete.confirm.title')}
+        {...archiveDeleteTarget === null
+          ? {}
+          : { description: t('archive.delete.confirm.desc', { name: archiveDeleteTarget }) }}
+        footer={(
+          <>
+            <Button variant="outline" disabled={archiveDeleting} onClick={closeArchiveDelete}>{t('cancel')}</Button>
+            <Button
+              variant="outline"
+              className={css.deleteAction}
+              disabled={archiveDeleting}
+              onClick={confirmArchiveDelete}
+            >
+              {t('archive.delete')}
+            </Button>
+          </>
+        )}
+      >
+        {archiveDeleting && <div className={css.deleteStatus} role="status">{t('delete.pending')}</div>}
+        {archiveDeleteError !== null && <div className={css.renameError} role="alert">{archiveDeleteError}</div>}
       </Modal>
     </div>
   )
