@@ -15,9 +15,7 @@ function isBuildFaceClient(value: unknown): boolean {
  */
 export default defineConfig(({ env }) => {
   const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
-  return {
-    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
-    entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
+  const baseConfig = {
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',
@@ -25,6 +23,18 @@ export default defineConfig(({ env }) => {
     fixedExtension: false,
     dts: false,
     clean: false,
-    plugins: client ? [] : [typertPlugin({ mode: 'workspace', faces: ['host'] })],
+  }
+  if (client) {
+    return {
+      ...baseConfig,
+      workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
+      entry: '',
+      plugins: [],
+    }
+  }
+  return {
+    ...baseConfig,
+    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
+    plugins: [typertPlugin({ mode: 'workspace', faces: ['host'] })],
   }
 })
