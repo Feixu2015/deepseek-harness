@@ -15,9 +15,8 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  /* Sides = composer clearance + 16px: on narrow viewports the transcript
-     stays exactly 32px narrower than the input card (the shared width rule). */
-  padding: 16px calc(var(--dsh-composer-side-clearance) + 16px);
+  /* Horizontal padding: 12px margins on wide screens. */
+  padding: 16px 12px;
 }
 
 :global([data-conversation-scroll]) .root {
