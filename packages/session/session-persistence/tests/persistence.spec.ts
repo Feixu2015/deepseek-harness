@@ -70,6 +70,10 @@ interface CoordinatorInternals {
 class MemoryPersistence extends SessionPersistence implements PersistenceBackend<never> {
   override readonly supportsRawArtifacts = false
 
+  async delete(_id: SessionId): Promise<void> {
+    // test stub: no-op
+  }
+
   static inject = ['sessions']
 
   override readonly name = 'session-persistence-memory'

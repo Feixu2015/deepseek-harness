@@ -15,6 +15,10 @@ const contexts: Context[] = []
 class TestPersistence extends SessionPersistence {
   override readonly supportsRawArtifacts = false
 
+  async delete(_id: SessionId): Promise<void> {
+    // test stub: no-op
+  }
+
   locate(_meta: SessionHeader): undefined { return undefined }
   create(_meta: SessionHeader): Promise<void> { return Promise.resolve() }
   append(_id: SessionId, _events: readonly SessionEvent[]): Promise<void> { return Promise.resolve() }

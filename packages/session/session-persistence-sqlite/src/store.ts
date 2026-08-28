@@ -61,7 +61,7 @@ export class SqliteStore implements PersistenceBackend<number> {
   private databasePath!: string
   private opened = false
   private pathReady: Promise<void> | undefined
-  private ready: Promise<void> | undefined
+  ready: Promise<void> | undefined
 
   constructor(private readonly options: SqliteStoreOptions) {}
 
@@ -401,6 +401,16 @@ export class SqliteStore implements PersistenceBackend<number> {
       randomUUID(),
     ) as { id: number }
     return inserted.id
+  }
+
+  /**
+   * Permanently delete a session's durable data: both its events and its
+   * metadata row.
+   * @param id - the session whose data should be deleted.
+   */
+  deleteSession(id: SessionId): void {
+    this.db.prepare('DELETE FROM events WHERE session_id = ?').run(id)
+    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
   }
 }
 

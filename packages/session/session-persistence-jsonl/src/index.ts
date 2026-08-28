@@ -981,6 +981,23 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     }
   }
   /* v8 ignore stop */
+
+  /**
+   * Permanently delete a session's durable data: the JSONL log file and its
+   * parent directory (best-effort). Absent sessions resolve without error.
+   * @param id - the session whose log file should be deleted.
+   */
+  async delete(id: SessionId): Promise<void> {
+    const path = await this.findLog(id)
+    if (path === undefined) return
+    await rm(path, { force: true })
+    const dir = dirname(path)
+    try {
+      await rm(dir, { recursive: true, force: true })
+    } catch {
+      // best-effort: directory may have already been removed or may be shared
+    }
+  }
 }
 
 export default JsonlSessionPersistence

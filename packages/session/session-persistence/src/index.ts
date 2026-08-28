@@ -280,6 +280,15 @@ export abstract class SessionPersistence extends Service {
    * @returns one header and opaque revision per materialized session without loading full logs.
    */
   abstract listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]>
+
+  /**
+   * Permanently delete all durable data for a session. Implementations MUST
+   * remove the session's events, metadata, and any backend-specific artifacts.
+   * Called by the workspace registry's `deleteArchivedSession` after the session
+   * has been removed from the archive set and all workspace accounting.
+   * @param id - the session whose durable data should be deleted.
+   */
+  abstract delete(id: SessionId): Promise<void>
 }
 
 export default SessionPersistence

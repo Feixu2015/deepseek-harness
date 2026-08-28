@@ -255,6 +255,61 @@ export class WorkspaceRegistry extends Service {
   }
 
   /**
+   * Unarchive one session durably: removes it from the archive set so it
+   * reappears in its original workspace accounting position.
+   * @param sessionId - The archived session to unarchive.
+   * @returns resolution after durability.
+   */
+  unarchiveSession(sessionId: SessionId): Promise<void> {
+    return this.enqueueOperation(async () => {
+      const state = this.requireState()
+      if (!state.archivedSessionIds.includes(sessionId)) {
+        throw new WorkspaceUnknownSessionError(sessionId)
+      }
+      await this.setState({
+        ...state,
+        archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
+      })
+    })
+  }
+
+  /**
+   * Permanently delete one archived session: removes it from the archive set,
+   * from every workspace's accounting, from the header index, and deletes its
+   * durable data from session persistence. The session must be archived.
+   * An unknown session fails with {@link WorkspaceUnknownSessionError}.
+   * @param sessionId - The archived session to delete.
+   * @returns resolution after durability.
+   */
+  deleteArchivedSession(sessionId: SessionId): Promise<void> {
+    return this.enqueueOperation(async () => {
+      const state = this.requireState()
+      if (!state.archivedSessionIds.includes(sessionId)) {
+        throw new WorkspaceUnknownSessionError(sessionId)
+      }
+      // Remove from archive set
+      const nextArchivedIds = state.archivedSessionIds.filter(id => id !== sessionId)
+      // Remove from every workspace's accounting. Use hasSession (checks
+      // raw record.sessionIds) instead of the sessionIds getter (which
+      // filters by sessionPath) so that sessions whose cwd no longer
+      // resolves are still durably detached.
+      for (const entity of this.entities.values()) {
+        if (entity.hasSession(sessionId)) {
+          await entity.detachSession(sessionId)
+        }
+      }
+      // Remove from header index
+      this.headers.delete(sessionId)
+      this.sessionPaths.delete(sessionId)
+      this.invalidSessionPaths.delete(sessionId)
+      // Update archive set in state
+      await this.setState({ ...state, archivedSessionIds: nextArchivedIds })
+      // Delete durable data from persistence
+      await this.ctx.sessionPersistence.delete(sessionId)
+    })
+  }
+
+  /**
    * Whether a session is live, header-indexed, or present in a fresh
    * persistence listing. Only a definite miss returns false — a failing
    * `sessionPersistence.list()` propagates so storage faults never

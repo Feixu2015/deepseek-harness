@@ -139,6 +139,16 @@ export class SqliteSessionPersistence extends SessionPersistence {
   listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]> {
     return this.store.listSnapshots(signal)
   }
+
+  /**
+   * Permanently delete a session's durable data from the SQLite store: both
+   * its events and its metadata row.
+   * @param id - the session whose data should be deleted.
+   */
+  async delete(id: SessionId): Promise<void> {
+    await this.store.ready
+    this.store.deleteSession(id)
+  }
 }
 
 export default SqliteSessionPersistence

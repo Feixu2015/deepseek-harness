@@ -177,6 +177,17 @@ export class WorkspaceEntity implements Workspace {
       : record)
   }
 
+  /**
+   * Check whether the raw record accounts this session (ignoring the
+   * sessionPath-based filter applied by the {@link sessionIds} getter).
+   * Needed to durably prune archived sessions whose cwd no longer resolves.
+   * @param sessionId - Session to check.
+   * @returns `true` when the raw record includes the id.
+   */
+  hasSession(sessionId: SessionId): boolean {
+    return this.record.sessionIds.includes(sessionId)
+  }
+
   async status(): Promise<'ok' | 'missing-dir'> {
     try {
       return (await stat(this.record.path)).isDirectory() ? 'ok' : 'missing-dir'

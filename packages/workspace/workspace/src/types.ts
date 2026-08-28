@@ -95,6 +95,14 @@ export interface Workspace {
   detachSession(sessionId: SessionId): Promise<void>
 
   /**
+   * Check whether the raw record accounts this session (ignoring the
+   * sessionPath-based filter applied by the {@link sessionIds} getter).
+   * @param sessionId - Session to check.
+   * @returns `true` when the raw record includes the id.
+   */
+  hasSession(sessionId: SessionId): boolean
+
+  /**
    * Live directory check, uncached: whether {@link path} currently exists and
    * is a directory. A missing directory never mutates the record — the
    * directory may only be temporarily moved.

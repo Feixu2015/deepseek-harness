@@ -111,6 +111,10 @@ export function messageFixture(
 class TestPersistence extends SessionPersistence {
   override readonly supportsRawArtifacts = false
 
+  async delete(_id: SessionId): Promise<void> {
+    // test stub: no-op
+  }
+
   static inject = ['sessions']
 
   readonly durable = new Map<SessionId, SessionInspection>()

@@ -69,6 +69,10 @@ function replaceCursorOffset(
 class TestPersistence extends SessionPersistence {
   override readonly supportsRawArtifacts = false
 
+  async delete(_id: SessionId): Promise<void> {
+    // test stub: no-op
+  }
+
   static entries = new Map<SessionIdType, { meta: SessionHeader; events: SessionEvent[] }>()
   static revisions = new Map<SessionIdType, number>()
   static nextRevision = 0
